@@ -37,7 +37,6 @@
 @property (nonatomic, readwrite, assign) dispatch_queue_t queue;
 #endif
 @property (nonatomic, readonly) NSMutableData *outData;
-@property (nonatomic, readwrite, copy) RNCryptorHandler handler;
 @property (nonatomic, readwrite, assign) NSUInteger HMACLength;
 @property (nonatomic, readwrite, strong) NSError *error;
 @property (nonatomic, readwrite, assign, getter=isFinished) BOOL finished;

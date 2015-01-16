@@ -372,7 +372,6 @@ static int RN_SecRandomCopyBytes(void *rnd, size_t count, uint8_t *bytes) {
 
 - (id)initWithHandler:(RNCryptorHandler)handler
 {
-  NSParameterAssert(handler);
   self = [super init];
   if (self) {
     NSString *responseQueueName = [@"net.robnapier.response." stringByAppendingString:NSStringFromClass([self class])];
@@ -448,5 +447,133 @@ static int RN_SecRandomCopyBytes(void *rnd, size_t count, uint8_t *bytes) {
   return self.HMACLength > 0;
 }
 
+- (void)setDestinationStream:(NSOutputStream *)outputStream dataRequestHandler:(void (^)(RNCryptor *cryptor))requestData endOfStreamHandler:(void (^)(NSError *streamError))endHandler
+{
+  [outputStream open];
+  void (^completionHandler)(NSError *) = ^(NSError *error) {
+    [outputStream close];
+    if (endHandler)
+      endHandler(error);
+    
+    // We can't release _handler immediately, because it owns this block itself
+    [_handler autorelease];
+    _handler = nil;
+  };
+  
+  self.handler = ^(RNCryptor *cryptor, NSData *data) {
+    NSInteger bytesWritten = [outputStream write:data.bytes maxLength:data.length];
+    
+    if (bytesWritten != data.length) {
+      NSStreamStatus streamStatus = outputStream.streamStatus;
+      if (streamStatus == NSStreamStatusAtEnd || streamStatus == NSStreamStatusClosed || streamStatus == NSStreamStatusError)
+        return completionHandler(outputStream.streamError);
+      
+      // Attempt the write again if it failed
+      NSData *remainingData = (bytesWritten > 0 ? [data subdataWithRange:NSMakeRange(bytesWritten, (data.length - bytesWritten))] : data);
+      dispatch_async(self.responseQueue, ^{
+        self.handler(cryptor, remainingData);
+      });
+      
+    } else {
+      if (cryptor.isFinished)
+        completionHandler(nil);
+      else if (requestData)
+        requestData(self);
+    }
+  };
+  
+  if (requestData)
+    requestData(self);
+}
+
+- (void)startProcessingStream:(NSInputStream *)inputStream intoDestinationStream:(NSOutputStream *)outputStream bufferSize:(NSUInteger)bufferSize endOfStreamHandler:(void (^)(NSError *streamError))endHandler
+{
+  [inputStream open];
+  void (^completionHandler)(NSError *) = ^(NSError *error) {
+    [inputStream close];
+    if (endHandler)
+      endHandler(error);
+  };
+  
+  NSMutableData *buffer = [NSMutableData dataWithCapacity:bufferSize];
+  void (^dataProvider)(RNCryptor *) = ^(RNCryptor *cryptor) {
+    [buffer setLength:bufferSize];
+    NSInteger bytesRead = [inputStream read:[buffer mutableBytes] maxLength:bufferSize];
+    
+    if (bytesRead < 0) {
+      completionHandler([inputStream streamError]);
+    } else if (bytesRead == 0) {
+      [cryptor finish];
+    } else {
+      [buffer setLength:bytesRead];
+      [cryptor addData:buffer];
+    }
+  };
+  
+  [self setDestinationStream:outputStream dataRequestHandler:dataProvider endOfStreamHandler:completionHandler];
+}
+
+- (void)createStreamPairWithBufferSize:(NSUInteger)bufferSize inputStream:(NSInputStream **)inputStream outputStream:(NSOutputStream **)outputStream
+{
+  CFStreamCreateBoundPair(kCFAllocatorDefault, (CFReadStreamRef *)inputStream, (CFWriteStreamRef *)outputStream, bufferSize);
+  [*inputStream autorelease];
+  [*outputStream autorelease];
+}
+
+- (void)startProcessingAfterStreamOpens:(NSStream *)stream withInputStream:(NSInputStream *)inputStream andDestinationStream:(NSOutputStream *)destinationStream bufferSize:(NSUInteger)bufferSize endOfStreamHandler:(void (^)(NSError *streamError))endHandler
+{
+  // Poll until the stream is opened
+  // (it might seem like a good idea to set the stream's delegate/client callback for this purpose,
+  // but that won't work in cases where the stream's consumer is its delegate,
+  // such as when the stream is being used by Cocoa's URL Loading system)
+  __block dispatch_block_t waitUntilStreamIsOpen = ^{
+    NSStreamStatus streamStatus = [stream streamStatus];
+    
+    switch (streamStatus) {
+      case NSStreamStatusNotOpen:
+      case NSStreamStatusOpening:
+        dispatch_async(self.responseQueue, waitUntilStreamIsOpen);
+        break;
+      case NSStreamStatusOpen:
+        [self startProcessingStream:inputStream intoDestinationStream:destinationStream bufferSize:(bufferSize / 2) endOfStreamHandler:endHandler];
+        break;
+      case NSStreamStatusReading:
+      case NSStreamStatusWriting:
+      case NSStreamStatusAtEnd:
+      case NSStreamStatusClosed:
+      case NSStreamStatusError:
+      default:
+        if (endHandler)
+          endHandler([stream streamError]);
+        break;
+    }
+  };
+  
+  // Copy the block to get it off of the stack
+  waitUntilStreamIsOpen = [[waitUntilStreamIsOpen copy] autorelease];
+  waitUntilStreamIsOpen();
+}
+
+- (NSInputStream *)processedInputStreamWithStream:(NSInputStream *)inputStream bufferSize:(NSUInteger)bufferSize endOfStreamHandler:(void (^)(NSError *streamError))endHandler
+{
+  NSInputStream *resultStream = nil;
+  NSOutputStream *encryptionDestination = nil;
+  [self createStreamPairWithBufferSize:bufferSize inputStream:&resultStream outputStream:&encryptionDestination];
+  
+  [self startProcessingAfterStreamOpens:resultStream withInputStream:inputStream andDestinationStream:encryptionDestination bufferSize:bufferSize endOfStreamHandler:endHandler];
+  
+  return resultStream;
+}
+
+- (NSOutputStream *)outputStreamWithDestinationStream:(NSOutputStream *)destinationStream bufferSize:(NSUInteger)bufferSize endOfStreamHandler:(void (^)(NSError *streamError))endHandler
+{
+  NSInputStream *inputStream = nil;
+  NSOutputStream *resultStream = nil;
+  [self createStreamPairWithBufferSize:bufferSize inputStream:&inputStream outputStream:&resultStream];
+
+  [self startProcessingAfterStreamOpens:resultStream withInputStream:inputStream andDestinationStream:destinationStream bufferSize:bufferSize endOfStreamHandler:endHandler];
+  
+  return resultStream;
+}
 
 @end
