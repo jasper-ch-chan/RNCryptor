@@ -278,7 +278,7 @@ RN_CCKeyDerivationPBKDF( CCPBKDFAlgorithm algorithm, const char *password, size_
   }
 
   // Use the built-in PBKDF2 if it's available. Otherwise, we have our own. Hello crazy function pointer.
-  int result;
+  int __unused result;
   int (*PBKDF)(CCPBKDFAlgorithm algorithm, const char *password, size_t passwordLen,
                const uint8_t *salt, size_t saltLen,
                CCPseudoRandomAlgorithm prf, uint rounds,
@@ -358,7 +358,7 @@ static int RN_SecRandomCopyBytes(void *rnd, size_t count, uint8_t *bytes) {
 {
   NSMutableData *data = [NSMutableData dataWithLength:length];
 
-  int result;
+  int __unused result;
   if (SecRandomCopyBytes != NULL) {
     result = SecRandomCopyBytes(NULL, length, data.mutableBytes);
   }
