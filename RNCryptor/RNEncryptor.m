@@ -213,7 +213,7 @@
     return;
   }
 
-  dispatch_async(self.queue, ^{
+  dispatch_async(self.queue, ^{ @autoreleasepool {
     if (self.isFinished) {
       return;
     }
@@ -243,7 +243,7 @@
       }
     });
     [self.outData setLength:0];
-  });
+  }});
 }
 
 - (void)finish
@@ -252,7 +252,7 @@
     return;
   }
 
-  dispatch_async(self.queue, ^{
+  dispatch_async(self.queue, ^{ @autoreleasepool {
     if (self.isFinished) {
       return;
     }
@@ -266,7 +266,7 @@
       [self.outData appendData:HMACData];
     }
     [self cleanupAndNotifyWithError:error];
-  });
+  }});
 }
 
 - (void)dealloc
