@@ -24,9 +24,11 @@
 //  DEALINGS IN THE SOFTWARE.
 //
 
-#import "RNCryptor+Private.h"
 #import "RNDecryptor.h"
+#import "RNCryptor+Private.h"
 #import "RNCryptorEngine.h"
+
+#import <CommonCrypto/CommonHMAC.h>
 
 static const NSUInteger kPreambleSize = 2;
 

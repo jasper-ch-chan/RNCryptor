@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name = 'RNCryptor'
-  s.version = '2.2'
+  s.version = '3.0.1'
   s.summary = 'Encryptor/Decryptor for iOS.'
   s.authors = {'Rob Napier' => 'robnapier@gmail.com'}
   s.license = { 
@@ -20,6 +20,7 @@ LIC
   s.homepage = 'https://github.com/rnapier/RNCryptor'
   s.source_files = 'RNCryptor/*.{h,m}'
   s.public_header_files = 'RNCryptor/*.h'
+  s.private_header_files = "RNCryptor/RNCryptorEngine.h", "RNCryptor/RNCryptor+Private.h"
   s.requires_arc = true
   s.frameworks = 'Security'
   s.ios.deployment_target = '5.0'

@@ -24,9 +24,11 @@
 //  DEALINGS IN THE SOFTWARE.
 //
 
-#import "RNCryptor+Private.h"
 #import "RNEncryptor.h"
+#import "RNCryptor+Private.h"
 #import "RNCryptorEngine.h"
+
+#import <CommonCrypto/CommonHMAC.h>
 
 @interface RNEncryptor ()
 @property (nonatomic, readwrite, strong) NSData *encryptionSalt;
